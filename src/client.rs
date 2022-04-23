@@ -150,8 +150,9 @@ fn spawn_network_channel() -> Receiver<String> {
                     match stream.read_exact(&mut data) {
                         Ok(_) => {
                             if &data == msg {
-                                info!("Reply is ok! ({})", from_utf8(&data).unwrap().to_string());
-                                tx.send(from_utf8(&data).unwrap().to_string()).unwrap();
+                                let data_str = from_utf8(&data).unwrap().to_string();
+                                info!("Reply is ok! ({})", data_str);
+                                tx.send(data_str).unwrap();
                             } else {
                                 let text = from_utf8(&data).unwrap();
                                 info!("Unexpected reply: {}", text);
@@ -192,12 +193,12 @@ fn main() {
         tick(&mut player, &mut stdout);
         match stdin_channel.try_recv() {
             Ok(key) => got_key(key, &mut player),
-            Err(TryRecvError::Empty) => continue,
+            Err(TryRecvError::Empty) => (),
             Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
         }
         match network_channel.try_recv() {
             Ok(data) => info!("got data: {}", data),
-            Err(TryRecvError::Empty) => continue,
+            Err(TryRecvError::Empty) => (),
             Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
         }
     }
