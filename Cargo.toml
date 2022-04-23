@@ -2,10 +2,21 @@
 name = "chidraqul5"
 version = "0.1.0"
 edition = "2021"
+default-run = "client"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "server"
+path = "src/server.rs"
+
+[[bin]]
+name = "client"
+path = "src/client.rs"
 
 [dependencies]
 terminal_size = "0.1.13"
 crossterm = "0.23.2"
+log = "0.4.6"
+simplelog = "^0.12.0"
 

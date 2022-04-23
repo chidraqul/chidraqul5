@@ -9,12 +9,22 @@ use crossterm::{
 };
 use terminal_size::{terminal_size, Height, Width};
 
-use std::io::{stdout, Write};
+use std::net::TcpStream;
+use std::str::from_utf8;
+
+use std::fs::File;
+use std::io::{stdout, Read, Write};
 use std::process;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
 use std::{thread, time};
+
+#[macro_use]
+extern crate log;
+extern crate simplelog;
+
+use simplelog::*;
 
 const WORLD_HEIGHT: i16 = 20;
 const WORLD_WIDTH: i16 = 40;
@@ -50,7 +60,10 @@ fn render(player: &mut Player, stdout: &mut std::io::Stdout) -> Result<()> {
             ))?
             .queue(style::PrintStyledContent("█".magenta()))?
             .queue(cursor::MoveTo(0, h))?;
-        println!("x={} y={} | ctrl+q to quit | A, D an SPACE to move\r", player.x, player.y);
+        println!(
+            "x={} y={} | ctrl+q to quit | A, D an SPACE to move\r",
+            player.x, player.y
+        );
     } else {
         println!("Unable to get terminal size");
         quit();
@@ -121,7 +134,46 @@ fn got_key(key: String, player: &mut Player) {
     }
 }
 
+fn network() {
+    match TcpStream::connect("localhost:5051") {
+        Ok(mut stream) => {
+            info!("Successfully connected to server in port 5051");
+
+            let msg = b"Hello!";
+
+            stream.write(msg).unwrap();
+            info!("Sent Hello, awaiting reply...");
+
+            let mut data = [0 as u8; 6]; // using 6 byte buffer
+            match stream.read_exact(&mut data) {
+                Ok(_) => {
+                    if &data == msg {
+                        info!("Reply is ok!");
+                    } else {
+                        let text = from_utf8(&data).unwrap();
+                        info!("Unexpected reply: {}", text);
+                    }
+                }
+                Err(e) => {
+                    info!("Failed to receive data: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            info!("Failed to connect: {}", e);
+        }
+    }
+    info!("Terminated.");
+}
+
 fn main() {
+    CombinedLogger::init(vec![WriteLogger::new(
+        LevelFilter::Info,
+        Config::default(),
+        File::create("client.log").unwrap(),
+    )])
+    .unwrap();
+    network();
     enable_raw_mode().unwrap();
     let mut player = Player {
         x: WORLD_WIDTH / 2,
