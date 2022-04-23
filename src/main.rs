@@ -50,7 +50,7 @@ fn render(player: &mut Player, stdout: &mut std::io::Stdout) -> Result<()> {
             ))?
             .queue(style::PrintStyledContent("█".magenta()))?
             .queue(cursor::MoveTo(0, h))?;
-        println!("x={} y={} | ctrl+q to quit\r", player.x, player.y);
+        println!("x={} y={} | ctrl+q to quit | A, D an SPACE to move\r", player.x, player.y);
     } else {
         println!("Unable to get terminal size");
         quit();
