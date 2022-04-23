@@ -136,38 +136,39 @@ fn got_key(key: String, player: &mut Player) {
 
 fn spawn_network_channel() -> Receiver<String> {
     let (tx, rx) = mpsc::channel::<String>();
-    match TcpStream::connect("localhost:5051") {
-        Ok(mut stream) => {
-            info!("Successfully connected to server in port 5051");
+    thread::spawn(move || {
+        match TcpStream::connect("localhost:5051") {
+            Ok(mut stream) => {
+                info!("Successfully connected to server in port 5051");
 
-            thread::spawn(move || loop {
-                let msg = b"Hello!";
-                stream.write(msg).unwrap();
-                // info!("Sent Hello, awaiting reply...");
+                loop {
+                    let msg = b"Hello!";
+                    stream.write(msg).unwrap();
+                    // info!("Sent Hello, awaiting reply...");
 
-                let mut data = [0 as u8; 6]; // using 6 byte buffer
-                match stream.read_exact(&mut data) {
-                    Ok(_) => {
-                        if &data == msg {
-                            info!("Reply is ok! ({})", from_utf8(&data).unwrap().to_string());
-                            tx.send(from_utf8(&data).unwrap().to_string()).unwrap();
-                        } else {
-                            let text = from_utf8(&data).unwrap();
-                            info!("Unexpected reply: {}", text);
+                    let mut data = [0 as u8; 6]; // using 6 byte buffer
+                    match stream.read_exact(&mut data) {
+                        Ok(_) => {
+                            if &data == msg {
+                                info!("Reply is ok! ({})", from_utf8(&data).unwrap().to_string());
+                                tx.send(from_utf8(&data).unwrap().to_string()).unwrap();
+                            } else {
+                                let text = from_utf8(&data).unwrap();
+                                info!("Unexpected reply: {}", text);
+                            }
+                        }
+                        Err(e) => {
+                            info!("Failed to receive data: {}", e);
                         }
                     }
-                    Err(e) => {
-                        info!("Failed to receive data: {}", e);
-                    }
+                    thread::sleep(time::Duration::from_millis(10));
                 }
-                thread::sleep(time::Duration::from_millis(10));
-            });
+            }
+            Err(e) => {
+                info!("Failed to connect: {}", e);
+            }
         }
-        Err(e) => {
-            info!("Failed to connect: {}", e);
-        }
-    }
-    info!("Terminated.");
+    });
     rx
 }
 
