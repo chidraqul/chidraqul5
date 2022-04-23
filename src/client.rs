@@ -26,18 +26,15 @@ extern crate simplelog;
 
 use simplelog::*;
 
+pub mod shared;
+use shared::player::Player;
+
 const WORLD_HEIGHT: i16 = 20;
 const WORLD_WIDTH: i16 = 40;
 
-struct Player {
-    x: i16,
-    y: i16,
-    vel_y: i16,
-}
-
 fn die(player: &mut Player) {
     player.x = WORLD_WIDTH / 2;
-    player.y = 0;
+    player.y = 1;
 }
 
 fn quit() {
@@ -99,22 +96,6 @@ fn spawn_stdin_channel() -> Receiver<String> {
 }
 
 fn tick(player: &mut Player, stdout: &mut std::io::Stdout) {
-    if player.vel_y > 0 {
-        player.vel_y -= 1;
-    }
-    if player.vel_y < 0 {
-        player.vel_y += 1;
-    }
-    if player.y < WORLD_HEIGHT {
-        player.vel_y += 1;
-    }
-    player.y += player.vel_y;
-    if player.x > WORLD_WIDTH || player.x < 0 {
-        die(player);
-    }
-    if player.y > WORLD_HEIGHT || player.y < 0 {
-        die(player);
-    }
     if let Err(e) = render(player, stdout) {
         println!("{}", e);
         quit();
@@ -134,6 +115,14 @@ fn got_key(key: String, player: &mut Player) {
     }
 }
 
+fn got_data(data: String, player: &mut Player) {
+    info!("got data {}", data);
+    match data.parse::<i16>() {
+        Ok(y) => player.y = y,
+        Err(e) => warn!("Got invalid data='{}' err='{}'", data, e),
+    }
+}
+
 fn spawn_network_channel() -> Receiver<String> {
     let (tx, rx) = mpsc::channel::<String>();
     thread::spawn(move || {
@@ -149,14 +138,9 @@ fn spawn_network_channel() -> Receiver<String> {
                     let mut data = [0 as u8; 6]; // using 6 byte buffer
                     match stream.read_exact(&mut data) {
                         Ok(_) => {
-                            if &data == msg {
-                                let data_str = from_utf8(&data).unwrap().to_string();
-                                info!("Reply is ok! ({})", data_str);
-                                tx.send(data_str).unwrap();
-                            } else {
-                                let text = from_utf8(&data).unwrap();
-                                info!("Unexpected reply: {}", text);
-                            }
+                            let data_str = from_utf8(&data).unwrap().to_string();
+                            info!("Reply is ok! ({})", data_str);
+                            tx.send(data_str).unwrap();
                         }
                         Err(e) => {
                             info!("Failed to receive data: {}", e);
@@ -183,7 +167,7 @@ fn main() {
     enable_raw_mode().unwrap();
     let mut player = Player {
         x: WORLD_WIDTH / 2,
-        y: 0,
+        y: 1,
         vel_y: 0,
     };
     let stdin_channel = spawn_stdin_channel();
@@ -197,7 +181,7 @@ fn main() {
             Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
         }
         match network_channel.try_recv() {
-            Ok(data) => info!("got data: {}", data),
+            Ok(data) => got_data(data, &mut player),
             Err(TryRecvError::Empty) => (),
             Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
         }
