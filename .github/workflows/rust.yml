@@ -22,3 +22,6 @@ jobs:
       run: cargo test --verbose
     - name: Check style
       run: cargo fmt --check
+    # TODO:
+    # - name: Clippy
+    #   run: cargo clippy
