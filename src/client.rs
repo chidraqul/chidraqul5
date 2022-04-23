@@ -17,6 +17,7 @@ use std::io::{stdout, Read, Write};
 use std::process;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
 use std::sync::mpsc::TryRecvError;
 use std::{thread, time};
 
@@ -31,6 +32,12 @@ use shared::player::Player;
 
 const WORLD_HEIGHT: i16 = 20;
 const WORLD_WIDTH: i16 = 40;
+
+struct Controls {
+    left: bool,
+    right: bool,
+    jump: bool,
+}
 
 fn die(player: &mut Player) {
     player.x = WORLD_WIDTH / 2;
@@ -103,15 +110,15 @@ fn tick(player: &mut Player, stdout: &mut std::io::Stdout) {
     thread::sleep(time::Duration::from_millis(10));
 }
 
-fn got_key(key: String, player: &mut Player) {
+fn got_key(key: String, controls: &mut Controls) {
     if key == "q" {
         quit();
-    } else if key == "d" {
-        player.x += 1;
     } else if key == "a" {
-        player.x -= 1;
+        controls.left = true;
+    } else if key == "d" {
+        controls.right = true;
     } else if key == " " {
-        player.vel_y -= 6;
+        controls.jump = true;
     }
 }
 
@@ -133,8 +140,9 @@ fn got_data(data: String, player: &mut Player) {
     }
 }
 
-fn spawn_network_channel() -> Receiver<String> {
+fn spawn_network_channel() -> (Receiver<String>, Sender<String>) {
     let (tx, rx) = mpsc::channel::<String>();
+    let (in_tx, in_rx) = mpsc::channel::<String>();
     thread::spawn(move || {
         match TcpStream::connect("localhost:5051") {
             Ok(mut stream) => {
@@ -142,7 +150,19 @@ fn spawn_network_channel() -> Receiver<String> {
 
                 loop {
                     let msg = b"Hello!";
-                    stream.write(msg).unwrap();
+                    let mut sent = false;
+                    match in_rx.try_recv() {
+                        Ok(input) => {
+                            info!("Thread got data {}", input);
+                            stream.write(input.as_bytes()).unwrap();
+                            sent = true;
+                        }
+                        Err(TryRecvError::Empty) => (),
+                        Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
+                    }
+                    if (!sent) {
+                        stream.write(msg).unwrap();
+                    }
                     // info!("Sent Hello, awaiting reply...");
 
                     let mut data = [0 as u8; 6]; // using 6 byte buffer
@@ -164,7 +184,14 @@ fn spawn_network_channel() -> Receiver<String> {
             }
         }
     });
-    rx
+    (rx, in_tx)
+}
+
+fn controls_to_network(controls: &Controls) -> String {
+    return format!(
+        "{}{}{}000",
+        controls.left as i8, controls.right as i8, controls.jump as i8
+    );
 }
 
 fn main() {
@@ -175,18 +202,24 @@ fn main() {
     )])
     .unwrap();
     enable_raw_mode().unwrap();
+    let mut controls = Controls {
+        left: false,
+        right: false,
+        jump: false,
+    };
     let mut player = Player {
         x: WORLD_WIDTH / 2,
         y: 1,
         vel_y: 0,
     };
     let stdin_channel = spawn_stdin_channel();
-    let network_channel = spawn_network_channel();
+    let (network_channel, in_tx) = spawn_network_channel();
     let mut stdout = stdout();
     loop {
         tick(&mut player, &mut stdout);
+        in_tx.send(controls_to_network(&controls)).unwrap();
         match stdin_channel.try_recv() {
-            Ok(key) => got_key(key, &mut player),
+            Ok(key) => got_key(key, &mut controls),
             Err(TryRecvError::Empty) => (),
             Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
         }

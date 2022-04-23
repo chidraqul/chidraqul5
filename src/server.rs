@@ -53,6 +53,11 @@ fn handle_client(mut stream: TcpStream) {
     while match stream.read(&mut data) {
         Ok(_size) => {
             tick(&mut player);
+            let data_str = std::str::from_utf8(&data).unwrap().to_string();
+            println!("got data: {}", data_str);
+            if data_str.chars().nth(0).unwrap() == '1' {
+                player.x -= 1;
+            }
             let reply = format!("{:0>3}{:0>3}", player.x, player.y);
             match stream.write(reply.as_bytes()) {
                 Ok(_) => (),
