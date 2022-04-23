@@ -2,13 +2,13 @@
 extern crate crossterm;
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use terminal_size::{Width, Height, terminal_size};
+use terminal_size::{terminal_size, Height, Width};
 
 use std::process;
-use std::{thread, time};
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
+use std::{thread, time};
 
 const WORLD_HEIGHT: i32 = 10;
 const WORLD_WIDTH: i32 = 20;
@@ -25,42 +25,41 @@ fn die(player: &mut Player) {
 
 fn quit() {
     disable_raw_mode().unwrap();
-	process::exit(1);
+    process::exit(1);
 }
 
 fn render(player: &mut Player) {
     let size = terminal_size();
     if let Some((Width(w), Height(h))) = size {
-            let width: usize = (w - 2).into();
-            for _y in 0..(h - 1) {
-                println!("|{}|\r", format!("{:w$}", "", w=width));
-            }
+        let width: usize = (w - 2).into();
+        for _y in 0..(h - 1) {
+            println!("|{}|\r", format!("{:w$}", "", w = width));
+        }
     } else {
-            println!("Unable to get terminal size");
-			quit();
+        println!("Unable to get terminal size");
+        quit();
     }
     println!("x={} y={} | ctrl+q to quit\r", player.x, player.y);
 }
 
-
 fn spawn_stdin_channel() -> Receiver<String> {
     let (tx, rx) = mpsc::channel::<String>();
     thread::spawn(move || loop {
-		match read().unwrap() {
-			Event::Key(KeyEvent {
-				code: KeyCode::Char('d'),
-				modifiers: KeyModifiers::NONE,
-			}) => tx.send("d".to_string()).unwrap(),
-			Event::Key(KeyEvent {
-				code: KeyCode::Char('a'),
-				modifiers: KeyModifiers::NONE,
-			}) => tx.send("a".to_string()).unwrap(),
-			Event::Key(KeyEvent {
-				code: KeyCode::Char('q'),
-				modifiers: KeyModifiers::CONTROL,
-			}) => tx.send("q".to_string()).unwrap(),
-			_ => (),
-		}
+        match read().unwrap() {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('d'),
+                modifiers: KeyModifiers::NONE,
+            }) => tx.send("d".to_string()).unwrap(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('a'),
+                modifiers: KeyModifiers::NONE,
+            }) => tx.send("a".to_string()).unwrap(),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('q'),
+                modifiers: KeyModifiers::CONTROL,
+            }) => tx.send("q".to_string()).unwrap(),
+            _ => (),
+        }
     });
     rx
 }
@@ -89,15 +88,17 @@ fn got_key(key: String, player: &mut Player) {
 
 fn main() {
     enable_raw_mode().unwrap();
-    let mut player = Player { x: WORLD_WIDTH / 2, y: 0 };
+    let mut player = Player {
+        x: WORLD_WIDTH / 2,
+        y: 0,
+    };
     let stdin_channel = spawn_stdin_channel();
     loop {
         tick(&mut player);
-		match stdin_channel.try_recv() {
-			Ok(key) => got_key(key, &mut player),
-			Err(TryRecvError::Empty) => continue,
-			Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
-		}
+        match stdin_channel.try_recv() {
+            Ok(key) => got_key(key, &mut player),
+            Err(TryRecvError::Empty) => continue,
+            Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
+        }
     }
 }
-
