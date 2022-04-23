@@ -134,36 +134,41 @@ fn got_key(key: String, player: &mut Player) {
     }
 }
 
-fn network() {
+fn spawn_network_channel() -> Receiver<String> {
+    let (tx, rx) = mpsc::channel::<String>();
     match TcpStream::connect("localhost:5051") {
         Ok(mut stream) => {
             info!("Successfully connected to server in port 5051");
 
-            let msg = b"Hello!";
+            thread::spawn(move || loop {
+                let msg = b"Hello!";
+                stream.write(msg).unwrap();
+                // info!("Sent Hello, awaiting reply...");
 
-            stream.write(msg).unwrap();
-            info!("Sent Hello, awaiting reply...");
-
-            let mut data = [0 as u8; 6]; // using 6 byte buffer
-            match stream.read_exact(&mut data) {
-                Ok(_) => {
-                    if &data == msg {
-                        info!("Reply is ok!");
-                    } else {
-                        let text = from_utf8(&data).unwrap();
-                        info!("Unexpected reply: {}", text);
+                let mut data = [0 as u8; 6]; // using 6 byte buffer
+                match stream.read_exact(&mut data) {
+                    Ok(_) => {
+                        if &data == msg {
+                            info!("Reply is ok! ({})", from_utf8(&data).unwrap().to_string());
+                            tx.send(from_utf8(&data).unwrap().to_string()).unwrap();
+                        } else {
+                            let text = from_utf8(&data).unwrap();
+                            info!("Unexpected reply: {}", text);
+                        }
+                    }
+                    Err(e) => {
+                        info!("Failed to receive data: {}", e);
                     }
                 }
-                Err(e) => {
-                    info!("Failed to receive data: {}", e);
-                }
-            }
+                thread::sleep(time::Duration::from_millis(10));
+            });
         }
         Err(e) => {
             info!("Failed to connect: {}", e);
         }
     }
     info!("Terminated.");
+    rx
 }
 
 fn main() {
@@ -173,7 +178,6 @@ fn main() {
         File::create("client.log").unwrap(),
     )])
     .unwrap();
-    network();
     enable_raw_mode().unwrap();
     let mut player = Player {
         x: WORLD_WIDTH / 2,
@@ -181,11 +185,17 @@ fn main() {
         vel_y: 0,
     };
     let stdin_channel = spawn_stdin_channel();
+    let network_channel = spawn_network_channel();
     let mut stdout = stdout();
     loop {
         tick(&mut player, &mut stdout);
         match stdin_channel.try_recv() {
             Ok(key) => got_key(key, &mut player),
+            Err(TryRecvError::Empty) => continue,
+            Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
+        }
+        match network_channel.try_recv() {
+            Ok(data) => info!("got data: {}", data),
             Err(TryRecvError::Empty) => continue,
             Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
         }
