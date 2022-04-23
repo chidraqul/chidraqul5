@@ -2,20 +2,27 @@
 extern crate crossterm;
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::{
+    cursor,
+    style::{self, Stylize},
+    terminal, ExecutableCommand, QueueableCommand, Result,
+};
 use terminal_size::{terminal_size, Height, Width};
 
+use std::io::{stdout, Write};
 use std::process;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
 use std::{thread, time};
 
-const WORLD_HEIGHT: i32 = 10;
-const WORLD_WIDTH: i32 = 20;
+const WORLD_HEIGHT: i16 = 20;
+const WORLD_WIDTH: i16 = 40;
 
 struct Player {
-    x: i32,
-    y: i32,
+    x: i16,
+    y: i16,
+    vel_y: i16,
 }
 
 fn die(player: &mut Player) {
@@ -28,18 +35,28 @@ fn quit() {
     process::exit(1);
 }
 
-fn render(player: &mut Player) {
+fn render(player: &mut Player, stdout: &mut std::io::Stdout) -> Result<()> {
     let size = terminal_size();
-    if let Some((Width(w), Height(h))) = size {
-        let width: usize = (w - 2).into();
-        for _y in 0..(h - 1) {
-            println!("|{}|\r", format!("{:w$}", "", w = width));
-        }
+    stdout.execute(terminal::Clear(terminal::ClearType::All))?;
+    if let Some((Width(_w), Height(h))) = size {
+        // let width: usize = (w - 2).into();
+        // for _y in 0..(h - 1) {
+        //     println!("|{}|\r", format!("{:w$}", "", w = width));
+        // }
+        stdout
+            .queue(cursor::MoveTo(
+                player.x.try_into().unwrap(),
+                player.y.try_into().unwrap(),
+            ))?
+            .queue(style::PrintStyledContent("█".magenta()))?
+            .queue(cursor::MoveTo(0, h))?;
+        println!("x={} y={} | ctrl+q to quit\r", player.x, player.y);
     } else {
         println!("Unable to get terminal size");
         quit();
     }
-    println!("x={} y={} | ctrl+q to quit\r", player.x, player.y);
+    stdout.flush()?;
+    Ok(())
 }
 
 fn spawn_stdin_channel() -> Receiver<String> {
@@ -55,6 +72,10 @@ fn spawn_stdin_channel() -> Receiver<String> {
                 modifiers: KeyModifiers::NONE,
             }) => tx.send("a".to_string()).unwrap(),
             Event::Key(KeyEvent {
+                code: KeyCode::Char(' '),
+                modifiers: KeyModifiers::NONE,
+            }) => tx.send(" ".to_string()).unwrap(),
+            Event::Key(KeyEvent {
                 code: KeyCode::Char('q'),
                 modifiers: KeyModifiers::CONTROL,
             }) => tx.send("q".to_string()).unwrap(),
@@ -64,15 +85,27 @@ fn spawn_stdin_channel() -> Receiver<String> {
     rx
 }
 
-fn tick(player: &mut Player) {
-    // player.y += 1;
+fn tick(player: &mut Player, stdout: &mut std::io::Stdout) {
+    if player.vel_y > 0 {
+        player.vel_y -= 1;
+    }
+    if player.vel_y < 0 {
+        player.vel_y += 1;
+    }
+    if player.y < WORLD_HEIGHT {
+        player.vel_y += 1;
+    }
+    player.y += player.vel_y;
     if player.x > WORLD_WIDTH || player.x < 0 {
         die(player);
     }
     if player.y > WORLD_HEIGHT || player.y < 0 {
         die(player);
     }
-    render(player);
+    if let Err(e) = render(player, stdout) {
+        println!("{}", e);
+        quit();
+    }
     thread::sleep(time::Duration::from_millis(10));
 }
 
@@ -83,6 +116,8 @@ fn got_key(key: String, player: &mut Player) {
         player.x += 1;
     } else if key == "a" {
         player.x -= 1;
+    } else if key == " " {
+        player.vel_y -= 6;
     }
 }
 
@@ -91,10 +126,12 @@ fn main() {
     let mut player = Player {
         x: WORLD_WIDTH / 2,
         y: 0,
+        vel_y: 0,
     };
     let stdin_channel = spawn_stdin_channel();
+    let mut stdout = stdout();
     loop {
-        tick(&mut player);
+        tick(&mut player, &mut stdout);
         match stdin_channel.try_recv() {
             Ok(key) => got_key(key, &mut player),
             Err(TryRecvError::Empty) => continue,
