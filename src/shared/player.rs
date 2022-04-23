@@ -5,4 +5,3 @@ pub struct Player {
     pub y: i16,
     pub vel_y: i16,
 }
-

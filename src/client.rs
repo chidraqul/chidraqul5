@@ -117,7 +117,17 @@ fn got_key(key: String, player: &mut Player) {
 
 fn got_data(data: String, player: &mut Player) {
     info!("got data {}", data);
-    match data.parse::<i16>() {
+    // let mut slices: Vec<&str> = Vec::new();
+    // slices.push(&data[..3]);
+    // slices.push(&data[3..]);
+    // for slice in slices {
+    //     info!("slice: {}", slice);
+    // }
+    match data[..3].parse::<i16>() {
+        Ok(x) => player.x = x,
+        Err(e) => warn!("Got invalid data='{}' err='{}'", data, e),
+    }
+    match data[3..].parse::<i16>() {
         Ok(y) => player.y = y,
         Err(e) => warn!("Got invalid data='{}' err='{}'", data, e),
     }

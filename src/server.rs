@@ -53,9 +53,8 @@ fn handle_client(mut stream: TcpStream) {
     while match stream.read(&mut data) {
         Ok(_size) => {
             tick(&mut player);
-            let reply = format!("{:0>6}", player.y);
+            let reply = format!("{:0>3}{:0>3}", player.x, player.y);
             match stream.write(reply.as_bytes()) {
-            // match stream.write(b"000010") {
                 Ok(_) => (),
                 Err(err) => {
                     disconnect(stream, err.to_string());
