@@ -202,6 +202,7 @@ fn main() {
         jump: false,
     };
     let mut player = Player {
+        id: 0,
         x: WORLD_WIDTH / 2,
         y: 1,
         vel_y: 0,

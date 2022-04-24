@@ -51,6 +51,7 @@ fn disconnect(stream: TcpStream, err: String) {
 fn handle_client(mut stream: TcpStream) {
     let mut data = [0 as u8; 50]; // using 50 byte buffer
     let mut player = Player {
+        id: 0,
         x: WORLD_WIDTH / 2,
         y: 1,
         vel_y: 0,
@@ -126,23 +127,31 @@ fn spawn_listen_channel() -> Receiver<String> {
     rx
 }
 
-fn game_loop() {
+fn game_loop(players: &mut Vec<Player>) {
     // println!("gameloop");
+    for player in players.iter() {
+        println!("player.id = {} player.x = {}", player.id, player.x);
+    }
     thread::sleep(time::Duration::from_millis(10));
 }
 
-fn on_data(data: &String, players: &mut Vec<&mut Player>) {
+fn on_data(data: &String, players: &mut Vec<Player>) {
     println!("got data from connection pool {}", data);
-    // let mut player = Box::new(Player { x: 1, y: 1, vel_y: 0 });
-    // players.push(&mut player);
+    let player = Player {
+        id: players.len() as i16,
+        x: 1,
+        y: 1,
+        vel_y: 0,
+    };
+    players.push(player);
 }
 
 fn main() {
     // let (listen_in, listen_out) = spawn_listen_channel();
     let listen_in = spawn_listen_channel();
-    let mut players: Vec<&mut Player> = Vec::new();
+    let mut players: Vec<Player> = Vec::new();
     loop {
-        game_loop();
+        game_loop(&mut players);
         // listen_out.send("BAN USERS");
         match listen_in.try_recv() {
             Ok(data) => on_data(&data, &mut players),
@@ -151,4 +160,3 @@ fn main() {
         }
     }
 }
-
