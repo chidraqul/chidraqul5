@@ -30,18 +30,12 @@ use simplelog::*;
 pub mod shared;
 use shared::player::Player;
 
-const WORLD_HEIGHT: i16 = 20;
 const WORLD_WIDTH: i16 = 40;
 
 struct Controls {
     left: bool,
     right: bool,
     jump: bool,
-}
-
-fn die(player: &mut Player) {
-    player.x = WORLD_WIDTH / 2;
-    player.y = 1;
 }
 
 fn quit() {
@@ -160,7 +154,7 @@ fn spawn_network_channel() -> (Receiver<String>, Sender<String>) {
                         Err(TryRecvError::Empty) => (),
                         Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
                     }
-                    if (!sent) {
+                    if !sent {
                         stream.write(msg).unwrap();
                     }
                     // info!("Sent Hello, awaiting reply...");
